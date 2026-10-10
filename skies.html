@@ -1,0 +1,199 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Skies from Here and There</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#0b1421;color:#dbe7f3;font:15px system-ui,sans-serif}main{max-width:1600px;margin:auto;padding:24px 28px}header{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:22px}h1{font-size:25px;font-weight:500;margin:0 0 6px}.muted{color:#8fa4bb;font-size:13px}.clocks{display:flex;gap:28px}.clock span{display:block;color:#8fa4bb;font-size:12px;margin-bottom:5px}.clock time{font-variant-numeric:tabular-nums}svg{display:block;width:100%;background:#0b1421;border-radius:8px}svg text{font-family:system-ui,sans-serif;fill:#a5b8cc;font-size:12px}.grid{stroke:#b9d5ed;stroke-opacity:.12;stroke-width:1}.axis{stroke:#9ab4cd;stroke-opacity:.6}.zenith{stroke:#b7ccdf;stroke-dasharray:5 6;stroke-opacity:.5}.north{stroke:#b9d5ed;stroke-opacity:.3}.header-data{display:flex;gap:26px;align-items:center;flex-wrap:wrap}.clocks{flex-direction:column;gap:8px}.rise-panel{cursor:pointer;border-radius:5px;padding:3px 7px}.rise-panel:hover{background:#18283b}.rise-panel:focus-visible{outline:1px solid #9ab4cd}.table-mode{font-size:10px;color:#8fa4bb;letter-spacing:.05em;margin-bottom:3px}table{border-collapse:collapse;font-size:13px;margin:0}td,th{padding:3px 12px 3px 0;text-align:left;font-variant-numeric:tabular-nums}th{color:#8fa4bb;font-weight:400}.note{color:#8fa4bb;font-size:12px;margin-top:16px;line-height:1.6}#error{color:#ffd39c}@media(max-width:600px){main{padding:16px 10px}.clocks{gap:15px}svg text{font-size:11px}}
+
+nav{display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;font-size:12px}a{color:inherit;text-decoration:underline;text-underline-offset:3px}nav a{color:#a5b8cc}nav a[aria-current="page"]{color:#f2f6fb;text-decoration-thickness:2px}.positions{margin-top:12px;font-size:12px;color:#9eafc1}summary{cursor:pointer}details p{max-width:90ch;margin:9px 0}.clocks time{white-space:nowrap}.note{margin-bottom:15px}#objectStatus{line-height:1.8;margin-top:8px}header{margin-bottom:12px}#places{margin-bottom:4px}
+@media(max-width:600px){main{padding:12px 8px}header{gap:10px;display:block}h1{font-size:21px}.header-data{display:grid;grid-template-columns:auto 1fr;gap:8px;margin-top:10px;align-items:start}.clocks{gap:7px}.clock span{font-size:9px;margin-bottom:2px}.clock time{font-size:11px}table{font-size:11px}td,th{padding:3px 7px 3px 0}.table-mode{font-size:9px;letter-spacing:0}.rise-panel{padding:2px 0}.muted{font-size:11px}nav{gap:12px;font-size:11px;margin-top:7px}.note{font-size:11px}}
+</style><main><header><div><h1 id="pageTitle">Skies from Here and There</h1><div class="muted" id="location"></div><nav id="places" aria-label="Sky location"></nav></div><div class="header-data"><div class="rise-panel" id="risePanel" role="button" tabindex="0" title="Click to switch between azimuth and local time" aria-label="Toggle rise and set azimuth or local time"><div class="table-mode" id="tableMode">AZIMUTH · click for time</div><table><thead><tr><th></th><th>Sun</th><th>Moon</th><th>Venus</th></tr></thead><tbody id="bearings"></tbody></table></div><div class="clocks"><div class="clock"><span id="localZone">LOCAL</span><time id="local"></time></div><div class="clock"><span>UTC</span><time id="utc"></time></div></div></div></header><div id="error"></div><svg id="sky" role="img" aria-label="Mollweide sky, with a reflected polar sky above the shared zenith"></svg><details class="positions"><summary>Current positions</summary><div id="objectStatus" class="muted"></div></details><details class="note"><summary>Paths and sky guide</summary><p>Gold: Sun · pale blue: Moon · peach: Venus. Only these three have daily paths and define the horizon span. Mars, Jupiter and Saturn show current positions only. Saturn’s rings and Jupiter’s four moon dots are symbolic.</p><p>Dashed gold: Sun limits. Dashed blue: Moon major limits ±28.6°; dotted blue: minor limits ±18.3°. Green dots: celestial equator. The pale violet Milky Way sketch is fixed against the stars; its widening is illustrative, not a measured brightness boundary. It stops at the last point above the horizon.</p><p id="analemmaNote"></p><p>The reflected sky above shares the zenith point. Mollweide distorts angles and distances; 10° at the horizon matches the height from 0° to 10° altitude.</p></details></main>
+<footer style="text-align:center; font-size:11px; opacity:0.65; padding:6px;">
+  Astronomical calculations by
+  <a href="https://github.com/cosinekitty/astronomy"
+     target="_blank" rel="noopener noreferrer">Astronomy Engine</a>,
+  &copy; Don Cross &mdash; MIT Licence.
+</footer> 
+<script src="astronomy.browser.js"></script><script>
+// EDIT LOCATION AND DISPLAY SETTINGS HERE.
+// All location settings live here. Footscray/Birchville are suburb-centre presets;
+// replace these with the precise household coordinates if preferred.
+const PLACES = {
+ gisborne:{name:'Gisborne',title:'Gisborne sky',latitude:-38.656627,longitude:178.025924,elevation:20,timeZone:'Pacific/Auckland',solarSampleUtcHour:0},
+ footscray:{name:'Footscray',title:'Footscray sky',latitude:-37.8,longitude:144.9,elevation:20,timeZone:'Australia/Melbourne',solarSampleUtcHour:2},
+ birchville:{name:'Birchville',title:'Birchville sky',latitude:-41.0916,longitude:175.1091,elevation:80,timeZone:'Pacific/Auckland',solarSampleUtcHour:0},
+ peterstow:{name:'Hereford, UK',title:'Peterstow sky',latitude:51.921042,longitude:-2.634806,elevation:100,timeZone:'Europe/London',solarSampleUtcHour:12}
+};
+const requestedPlace=new URLSearchParams(location.search).get('place');
+const placeKey=Object.hasOwn(PLACES,requestedPlace)?requestedPlace:'gisborne';
+const SITE=PLACES[placeKey];
+const northern=SITE.latitude>=0,faceAz=northern?180:0,backAz=(faceAz+180)%360;
+const SETTINGS={marginDegrees:5,gridDegrees:10,azimuthLabelDegrees:30,altitudeLabelDegrees:20};
+const PATH_SETTINGS={stepMinutes:4,solarSampleUtcHour:SITE.solarSampleUtcHour,lunarDaySeconds:89429};
+const BODIES=['Sun','Moon','Venus']; // Paths, rise/set table and daily framing.
+const DISPLAY_BODIES=[...BODIES,'Mars','Jupiter','Saturn'];
+let curves=[],analemmaDots=[];
+const observer = new Astronomy.Observer(SITE.latitude,SITE.longitude,SITE.elevation);
+const svg=document.getElementById('sky');let dayKey='',bounds,events,tableShowsTime=false,tableEvents=[],eventMinute=-1;
+const parts=(d,tz)=>Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:tz,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).formatToParts(d).filter(p=>p.type!=='literal').map(p=>[p.type,p.value]));
+function midnight(now){const p=parts(now,SITE.timeZone),target=Date.UTC(+p.year,+p.month-1,+p.day);let guess=target;for(let i=0;i<3;i++){const q=parts(new Date(guess),SITE.timeZone);guess+=target-Date.UTC(+q.year,+q.month-1,+q.day,+q.hour,+q.minute,+q.second)}return new Date(guess)}
+function bearing(body,time){if(!time)return null;const e=Astronomy.Equator(body,time,observer,true,true);return Astronomy.Horizon(time,observer,e.ra,e.dec,'normal').azimuth}
+const signed=a=>((a+180)%360+360)%360-180;
+const skyAz=a=>signed(a-faceAz);
+const trueAz=a=>(a+faceAz+360)%360;
+function layout(h,allowFold=false){const a=skyAz(h.azimuth),folded=allowFold&&Math.abs(a)>90;return {az:h.azimuth,alt:h.altitude,px:folded?-signed(a-180):a,py:h.altitude,folded}}
+
+function daily(now){const start=midnight(now);events=BODIES.map(body=>{const rise=Astronomy.SearchRiseSet(body,observer,1,start,1),set=Astronomy.SearchRiseSet(body,observer,-1,start,1);return{body,rise:bearing(body,rise),set:bearing(body,set),riseTime:rise?.date||null,setTime:set?.date||null}});const az=events.flatMap(e=>[e.rise,e.set]).filter(a=>a!==null).map(skyAz);bounds={left:Math.max(-180,Math.min(0,...az)-SETTINGS.marginDegrees),right:Math.min(180,Math.max(0,...az)+SETTINGS.marginDegrees)};buildPaths(now);renderTable();draw()}
+function refreshNearest(now){
+ const nearest=(body,dir)=>{const a=Astronomy.SearchRiseSet(body,observer,dir,now,-2),b=Astronomy.SearchRiseSet(body,observer,dir,now,2);if(!a)return b;if(!b)return a;return Math.abs(a.date-now)<=Math.abs(b.date-now)?a:b};
+ tableEvents=BODIES.map(body=>{const rise=nearest(body,1),set=nearest(body,-1);return {body,rise:bearing(body,rise),set:bearing(body,set),riseTime:rise?.date||null,setTime:set?.date||null}});
+ renderTable();
+}
+function eventSuffix(date){const a=parts(date,SITE.timeZone),b=parts(new Date(),SITE.timeZone);const key=p=>p.year+p.month+p.day;return key(a)<key(b)?'=':key(a)>key(b)?'+':''}
+function renderTable(){
+ const format=(e,kind)=>{if(e[kind]===null)return '—';return tableShowsTime?new Intl.DateTimeFormat('en-GB',{timeZone:SITE.timeZone,hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(e[kind+'Time'])+eventSuffix(e[kind+'Time']):e[kind].toFixed(1)+'°'};
+ document.getElementById('tableMode').textContent=tableShowsTime?'LOCAL 24h · = yesterday · + tomorrow':'AZIMUTH · click for time';
+ document.getElementById('bearings').innerHTML=['rise','set'].map(kind=>`<tr><th>${kind==='rise'?'Rise':'Set'}</th>${tableEvents.map(e=>`<td>${format(e,kind)}</td>`).join('')}</tr>`).join('');
+}
+function toggleTable(){tableShowsTime=!tableShowsTime;renderTable()}
+document.getElementById('risePanel').addEventListener('click',toggleTable);
+document.getElementById('risePanel').addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();toggleTable()}});
+// Approximate J2000 catalogue positions, RA in hours and declination in degrees.
+// Atlas (27 Tauri, the father): RA 57.2906, Dec +24.0534, Magnitude: 3.62
+// Pleione (28 Tauri, the mother): RA 57.2942, Dec +24.1351, Magnitude: 5.05
+const STARS = [
+ {name:'Acrux',ra:12.4433,dec:-63.0991,mag:0.77},
+ {name:'Mimosa',ra:12.7953,dec:-59.6888,mag:1.25},
+ {name:'Gacrux',ra:12.5194,dec:-57.1132,mag:1.59},
+ {name:'Imai',ra:12.2524,dec:-58.7489,mag:2.79},
+ {name:'Ginan',ra:12.3560,dec:-60.4011,mag:3.59},
+ {name:'α Centauri',ra:14.6601,dec:-60.8339,mag:-0.27},
+ {name:'β Centauri',ra:14.0637,dec:-60.3730,mag:0.61},
+ {name:'Sirius',ra:6.752481,dec:-16.716116,mag:-1.46,color:'#ffffff',dotOnly:true,catalogOnly:true},
+ {name:'Betelgeuse',ra:5.919529,dec:7.407064,mag:0.5,color:'#ff6655',dotOnly:true,catalogOnly:true},
+ {name:'Atlas',ra:3.81937307,dec:24.05341713,mag:3.62,color:'#ffffff',dotOnly:true,catalogOnly:true},
+ {name:'Pleione',ra:3.81978239,dec:24.13671020,mag:5.05,color:'#ffffff',dotOnly:true,catalogOnly:true}
+];
+STARS.forEach((s,i)=>{s.body=s.catalogOnly?s.name:'Star'+(i+1);if(!s.catalogOnly)Astronomy.DefineStar(s.body,s.ra,s.dec,1000)});
+let currentObjects=[],galaxyCurves=[];
+function catalogEquator(star,now){
+ // Precess J2000 catalogue coordinates into the equator/equinox of date.
+ const ra=star.ra*Math.PI/12,dec=star.dec*Math.PI/180,c=Math.cos(dec);
+ const v=new Astronomy.Vector(c*Math.cos(ra),c*Math.sin(ra),Math.sin(dec),now);
+ return Astronomy.EquatorFromVector(Astronomy.RotateVector(Astronomy.Rotation_EQJ_EQD(now),v));
+}
+// Invisible Milky Way anchors: galactic longitude/latitude -> J2000 vectors.
+// The two central branches are an illustrative width profile around the real plane.
+const galaxyRotation=Astronomy.Rotation_GAL_EQJ();
+function galacticVector(l,b){const lon=l*Math.PI/180,lat=b*Math.PI/180,c=Math.cos(lat);return Astronomy.RotateVector(galaxyRotation,new Astronomy.Vector(c*Math.cos(lon),c*Math.sin(lon),Math.sin(lat),new Date('2000-01-01T12:00:00Z')))}
+const GALAXY_ANCHORS=[{pts:Array.from({length:226},(_,i)=>galacticVector(90+i,0))},...[-1,1].map(side=>({pts:Array.from({length:136},(_,i)=>{const l=315+i,u=l-360,w=Math.sin(Math.PI*i/135)*(3+6*Math.exp(-Math.pow(u/35,2)));return galacticVector(l,side*w)})}))];
+function updateObjects(now){
+ const rotation=Astronomy.Rotation_EQJ_EQD(now);
+ currentObjects=[...DISPLAY_BODIES.map(body=>({body,name:body})),...STARS].map(o=>{
+ const e=o.catalogOnly?catalogEquator(o,now):Astronomy.Equator(o.body,now,observer,true,true),h=Astronomy.Horizon(now,observer,e.ra,e.dec,'normal');
+ return {...o,...layout(h,!DISPLAY_BODIES.includes(o.body))};
+ });
+ galaxyCurves=GALAXY_ANCHORS.map(c=>({color:'#c6bad9',width:1.4,opacity:.42,pts:c.pts.map(v=>{const e=Astronomy.EquatorFromVector(Astronomy.RotateVector(rotation,v));return layout(Astronomy.Horizon(now,observer,e.ra,e.dec,'normal'),true)})}));
+ document.getElementById('objectStatus').textContent=currentObjects.filter(o=>DISPLAY_BODIES.includes(o.body)).map(o=>`${o.name}: ${o.alt<0?'below horizon · ':''}az ${o.az.toFixed(1)}° · alt ${o.alt.toFixed(1)}°`).join('   |   ');
+ draw();
+}
+function position(body,date){const e=Astronomy.Equator(body,date,observer,true,true),h=Astronomy.Horizon(date,observer,e.ra,e.dec,'normal');return{az:h.azimuth,alt:h.altitude,px:skyAz(h.azimuth),py:h.altitude,date}}
+function buildPaths(now){
+ thetaCache.clear();curves=[];analemmaDots=[];const start=midnight(now),end=midnight(new Date(start.getTime()+36*3600000));
+ for(const body of BODIES){const pts=[];for(let ms=start.getTime();ms<=end.getTime();ms+=PATH_SETTINGS.stepMinutes*60000)pts.push(position(body,new Date(ms)));pts.push(position(body,end));curves.push({name:body+' today',color:body==='Sun'?'#ffd56d':body==='Moon'?'#d6e6fa':'#f4cca0',width:1.8,pts})}
+ const lst=Astronomy.SiderealTime(now)+SITE.longitude/15;
+ for(const [name,dec,color,dash] of [['Celestial equator',0,'#83bca9','3 6'],['Sun · June limit',23.44,'#c9a854','7 5'],['Sun · December limit',-23.44,'#c9a854','7 5'],['Moon · major north',28.6,'#91a2c9','6 6'],['Moon · major south',-28.6,'#91a2c9','6 6'],['Moon · minor north',18.3,'#7083a8','2 7'],['Moon · minor south',-18.3,'#7083a8','2 7']]){
+ const pts=[];for(let H=-12;H<=12;H+=.025){const ra=((lst-H)%24+24)%24,h=Astronomy.Horizon(now,observer,ra,dec,'normal');pts.push({px:skyAz(h.azimuth),py:h.altitude,alt:h.altitude})}curves.push({name,color,width:1,dash,pts})}
+ const d=parts(now,SITE.timeZone),year=+d.year,yearStart=Date.UTC(year,0,1,PATH_SETTINGS.solarSampleUtcHour),yearEnd=Date.UTC(year+1,0,1,PATH_SETTINGS.solarSampleUtcHour);const sunPts=[];
+ for(let ms=yearStart;ms<yearEnd;ms+=86400000)sunPts.push(position('Sun',new Date(ms)));
+ curves.push({name:'Solar analemma · '+String(PATH_SETTINGS.solarSampleUtcHour).padStart(2,'0')+':00 UTC',color:'#e9ba56',width:1.3,pts:[...sunPts,sunPts[0]]});
+ const sunDate=new Date(Date.UTC(year,+d.month-1,+d.day,PATH_SETTINGS.solarSampleUtcHour));analemmaDots.push({...position('Sun',sunDate),name:'Today on solar analemma',color:'#ffd56d'});
+ const lunarAnchor=Astronomy.SearchHourAngle('Moon',observer,0,start,1).time.date,moonPts=[];
+ for(let n=-14;n<=14;n++)moonPts.push(position('Moon',new Date(lunarAnchor.getTime()+n*PATH_SETTINGS.lunarDaySeconds*1000)));
+ curves.push({name:'Lunar analemma · one month near today',color:'#98d6ee',width:1.3,dash:'3 3',pts:moonPts});analemmaDots.push({...position('Moon',lunarAnchor),name:'Today on lunar analemma · transit',color:'#98d6ee'});
+}
+// Spherical Mollweide: 2θ + sin(2θ) = π sin(altitude).
+// Coordinates normalised so the 90° azimuth meridian is a unit circle.
+const thetaCache=new Map();
+function mollTheta(alt){
+ const clipped=Math.max(0,Math.min(90,alt));
+ if(clipped===90)return Math.PI/2;
+ if(thetaCache.has(clipped))return thetaCache.get(clipped);
+ const target=Math.PI*Math.sin(clipped*Math.PI/180);let lo=0,hi=Math.PI/2;
+ for(let i=0;i<40;i++){const m=(lo+hi)/2;if(2*m+Math.sin(2*m)<target)lo=m;else hi=m}
+ const theta=(lo+hi)/2;if(thetaCache.size>20000)thetaCache.clear();thetaCache.set(clipped,theta);return theta;
+}
+function project(p){const theta=mollTheta(p.alt);return {x:p.px/90*Math.cos(theta),y:p.folded?2-Math.sin(theta):Math.sin(theta)}}
+function draw(){
+ if(!bounds)return;
+ const width=svg.clientWidth||1000,phone=width<600,L=phone?30:50,R=phone?18:30,T=phone?32:42,B=phone?48:60;
+ const scale=(width-L-R)/((bounds.right-bounds.left)/90),verticalScale=scale/(9*Math.sin(mollTheta(10)));
+ const origin=L-bounds.left/90*scale,top=2,height=T+B+top*verticalScale;
+ svg.setAttribute('viewBox',`0 0 ${width} ${height}`);
+ const screen=p=>{const q=project(p);return{x:origin+q.x*scale,y:T+(top-q.y)*verticalScale}};
+ const txt=(x,y,t,anchor='middle',size=phone?10:12)=>`<text x="${x}" y="${y}" font-size="${size}" style="font-size:${size}px" text-anchor="${anchor}">${t}</text>`;
+ const path=(pts,attrs)=>`<path d="${pts.map((p,i)=>{const q=screen(p);return `${i?'L':'M'}${q.x.toFixed(2)},${q.y.toFixed(2)}`}).join(' ')}" ${attrs}/>`;
+ const arc=(az,folded=false)=>Array.from({length:91},(_,alt)=>({px:az,alt,folded}));
+ const limits=folded=>folded?{left:Math.max(bounds.left,-90),right:Math.min(bounds.right,90)}:bounds;
+ const outline=folded=>{const b=limits(folded);return [...arc(b.left,folded),...arc(b.right,folded).reverse()]};
+ let s=`<defs><clipPath id="mainClip">${path(outline(false),'')}</clipPath><clipPath id="backClip">${path(outline(true),'')}</clipPath></defs>`;
+ for(const folded of [false,true]){
+ const b=limits(folded);s+=path(outline(folded),`fill="${folded?'#132338':'#101e30'}" stroke="#506780" stroke-opacity=".55"`);
+ for(let az=Math.ceil(b.left/10)*10;az<=b.right;az+=10)s+=path(arc(az,folded),`fill="none" class="${az===0?'north':'grid'}"`);
+ for(let alt=0;alt<90;alt+=10)s+=path([{px:b.left,alt,folded},{px:b.right,alt,folded}],`fill="none" class="${alt===0?'axis':'grid'}"`);
+ }
+ // Paths break at below-horizon samples and projection seams; no horizon interpolation.
+ function curvePath(curve,folded){let d='',last=null;for(const p of curve.pts){if(p.alt<0||Boolean(p.folded)!==folded){last=null;continue}const q=screen(p),jump=last&&Math.abs(p.px-last.px)>90;d+=`${!last||jump?'M':'L'}${q.x.toFixed(2)},${q.y.toFixed(2)} `;last=p}return `<path d="${d}" fill="none" stroke="${curve.color}" stroke-width="${curve.width}" opacity="${curve.opacity??1}" ${curve.dash?`stroke-dasharray="${curve.dash}"`:''}/>`}
+ for(const folded of [false,true]){
+ s+=`<g clip-path="url(#${folded?'backClip':'mainClip'})">`;
+ for(const curve of galaxyCurves)s+=curvePath(curve,folded);
+ if(!folded)for(const curve of curves)s+=curvePath(curve,false);
+ s+='</g>';
+ }
+ const visible=o=>{const b=limits(Boolean(o.folded));return o.alt>=0&&o.px>=b.left&&o.px<=b.right};
+ for(const o of analemmaDots){if(visible(o)){const q=screen(o);s+=`<circle cx="${q.x}" cy="${q.y}" r="3.5" fill="${o.color}" stroke="#0b1421" stroke-width="1.3"><title>${o.name}: ${new Intl.DateTimeFormat('en-GB',{timeZone:SITE.timeZone,hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(o.date)}</title></circle>`}}
+ for(const names of [['Acrux','Gacrux'],['Mimosa','Imai']]){const a=currentObjects.find(o=>o.name===names[0]),b=currentObjects.find(o=>o.name===names[1]);if(a&&b&&visible(a)&&visible(b)&&a.folded===b.folded){const qa=screen(a),qb=screen(b);s+=`<line x1="${qa.x}" y1="${qa.y}" x2="${qb.x}" y2="${qb.y}" stroke="#b8d1ed" stroke-opacity=".45"/>`}}
+ function marker(o){const q=screen(o),color=o.color||(o.body==='Sun'?'#ffd56d':o.body==='Moon'?'#e4edf7':o.body==='Venus'?'#fff1c5':o.body==='Mars'?'#ec987c':o.body==='Jupiter'?'#e8d0ae':o.body==='Saturn'?'#dfd2ab':o.name==='Gacrux'?'#f1bc9a':'#e4edff');
+ const r=DISPLAY_BODIES.includes(o.body)?(['Sun','Moon'].includes(o.body)?6:4):Math.max(1.3,3.5-o.mag*.5);
+ let m='';if(o.body==='Saturn')m+=`<ellipse cx="${q.x}" cy="${q.y}" rx="8" ry="3.4" transform="rotate(-22 ${q.x} ${q.y})" fill="none" stroke="${color}" stroke-width="1.1"/>`;
+ m+=`<circle cx="${q.x}" cy="${q.y}" r="${r}" fill="${color}"/>`;
+ if(o.body==='Jupiter')for(const dx of [-13,-8,8,13])m+=`<circle cx="${q.x+dx}" cy="${q.y}" r="1" fill="${color}"/>`;
+ return `<g><title>${o.name}: az ${o.az.toFixed(1)}°, alt ${o.alt.toFixed(1)}°${['Saturn','Jupiter'].includes(o.body)?' · symbolic icon':''}</title>${m}</g>`;
+ }
+ for(const o of currentObjects)if(visible(o))s+=marker(o);
+ const horizon=screen({px:0,alt:0}),zenith=screen({px:0,alt:90}),pole=screen({px:0,alt:Math.abs(SITE.latitude),folded:true}),font=phone?10:12;
+ const labelBoxes=[{l:zenith.x+5,r:zenith.x+92,t:zenith.y-10,b:zenith.y+6},{l:pole.x+18,r:pole.x+96,t:pole.y-23,b:pole.y+22}];
+ const markerPoints=currentObjects.filter(visible).map(screen);
+ for(const o of currentObjects){if(!visible(o)||o.name==='Ginan'||o.dotOnly||phone&&!DISPLAY_BODIES.includes(o.body))continue;
+ const q=screen(o),right=q.x>width-R-85,w=o.name.length*font*.6;let chosen;
+ for(const dy of [-10,14,-27,31,-44,48]){const tx=q.x+(right?-11:11),ty=q.y+dy,box={l:right?tx-w:tx,r:right?tx:tx+w,t:ty-font,b:ty+3};if(box.l<4||box.r>width-4||box.t<T-10||box.b>height-B)continue;if(labelBoxes.some(b=>box.l<b.r+3&&box.r>b.l-3&&box.t<b.b+3&&box.b>b.t-3))continue;if(markerPoints.some(m=>m.x>box.l-4&&m.x<box.r+4&&m.y>box.t-4&&m.y<box.b+4))continue;chosen={tx,ty,box};break}
+ if(!chosen)continue;labelBoxes.push(chosen.box);if(Math.abs(chosen.ty-q.y)>20)s+=`<line x1="${q.x}" y1="${q.y}" x2="${chosen.tx}" y2="${chosen.ty-4}" stroke="#a5b8cc" stroke-opacity=".35"/>`;s+=txt(chosen.tx,chosen.ty,o.name,right?'end':'start');
+ }
+ for(const folded of [false,true]){const b=limits(folded);
+ for(let az=Math.ceil(b.left/30)*30;az<=b.right;az+=30){const q=screen({px:az,alt:0,folded}),bearing=folded?(backAz-az+360)%360:trueAz(az);s+=txt(q.x,folded?T-9:horizon.y+19,String(bearing).padStart(3,'0'))}
+ for(let alt=0;alt<90;alt+=20){const q=screen({px:b.left,alt,folded});s+=txt(q.x-6,q.y+4,String(alt),'end')}
+ }
+ s+=`<circle cx="${zenith.x}" cy="${zenith.y}" r="2.5" fill="#b7ccdf"/>`;s+=txt(zenith.x+8,zenith.y+4,'ZENITH · 90°','start');
+ s+=txt(origin,horizon.y+39,northern?'SOUTH':'NORTH');
+ if(bounds.left<=-90)s+=txt(screen({px:-90,alt:0}).x,horizon.y+39,northern?'EAST':'WEST');
+ if(bounds.right>=90)s+=txt(screen({px:90,alt:0}).x,horizon.y+39,northern?'WEST':'EAST');
+ s+=`<path d="M${pole.x-5},${pole.y}h10 M${pole.x},${pole.y-5}v10" fill="none" stroke="#b7ccdf" stroke-width="1.3"><title>${northern?'North':'South'} Celestial Pole: alt ${Math.abs(SITE.latitude).toFixed(3)}°</title></path>`;
+ for(const [i,word] of [northern?'NORTH':'SOUTH','CELESTIAL','POLE'].entries())s+=txt(pole.x+(phone?43:61),pole.y-10+i*(phone?12:14),word);
+ svg.innerHTML=s;
+}
+function tick(){const now=new Date(),p=parts(now,SITE.timeZone),key=`${p.year}-${p.month}-${p.day}`;document.getElementById('local').textContent=new Intl.DateTimeFormat('en-NZ',{timeZone:SITE.timeZone,weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).format(now);document.getElementById('utc').textContent=now.toISOString().replace('T',' ').replace(/\.\d+Z$/,' UTC');if(key!==dayKey){daily(now);dayKey=key}const minute=Math.floor(now.getTime()/60000);if(minute!==eventMinute){refreshNearest(now);eventMinute=minute}updateObjects(now)}
+document.title=SITE.title+' · Skies from Here and There';
+document.getElementById('pageTitle').textContent=SITE.title;
+document.getElementById('localZone').textContent='LOCAL · '+SITE.timeZone.toUpperCase();
+document.getElementById('location').textContent=`${SITE.latitude.toFixed(4)}°, ${SITE.longitude.toFixed(4)}°`;
+document.getElementById('places').innerHTML=Object.entries(PLACES).map(([key,p])=>`<a href="?place=${key}" ${key===placeKey?'aria-current="page"':''}>${key==='peterstow'?'Peterstow':p.name}</a>`).join('');
+document.getElementById('analemmaNote').textContent=`Solar analemma: sampled at ${String(PATH_SETTINGS.solarSampleUtcHour).padStart(2,'0')}:00 UTC throughout the year, with a gold date dot. Lunar loop: samples 24h 50m 29s apart, centred on today’s transit, with a cyan date dot. Larger markers are current positions.`;
+try{tick();setInterval(tick,1000);new ResizeObserver(draw).observe(svg)}catch(e){document.getElementById('error').textContent='Could not calculate the sky: '+e.message}
+</script></html>
+
+
+
+
+
+
+
+
+
+
